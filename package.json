@@ -1,6 +1,6 @@
 {
   "name": "dsh-skills-panel",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Left-sidebar Skills panel for the DSH web client: lists installed skills, pins favourites, and inserts /skill-name into the composer.",
   "keywords": [
     "dsh",
