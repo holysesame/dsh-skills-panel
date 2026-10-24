@@ -1,0 +1,8 @@
+# dsh-skills-panel bundle patch
+#
+# Mounts the plugin's single row. `dsh plugin --profile <name> add dsh-skills-panel`
+# reconciles dsh.profile.bundles from this declaration, so the package needs no
+# manual profile edit.
+- insert:
+    - id: skills-panel
+      name: 'dsh-skills-panel'

@@ -1,0 +1,59 @@
+{
+  "name": "dsh-skills-panel",
+  "version": "1.0.1",
+  "description": "Left-sidebar Skills panel for the DSH web client: lists installed skills, pins favourites, and inserts /skill-name into the composer.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "skills",
+    "sidebar",
+    "client-plugin"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "scripts/sync-skills.mjs",
+    "README.md",
+    "LICENSE",
+    "icon.svg"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    },
+    "manifestVersion": 1
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.5"
+  },
+  "author": "holysesame",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/holysesame/dsh-skills-panel.git"
+  },
+  "homepage": "https://github.com/holysesame/dsh-skills-panel#readme",
+  "bugs": {
+    "url": "https://github.com/holysesame/dsh-skills-panel/issues"
+  }
+}
