@@ -1,27 +1,37 @@
 #!/usr/bin/env node
 /**
- * Regenerate the skill manifest inside lib/client.js.
+ * 技能目录自检脚本（诊断用）。
  *
  *   node scripts/sync-skills.mjs
  *
- * Scans the DSH skill roots, reads each SKILL.md frontmatter, and rewrites the
- * marker block in lib/client.js. Run it after installing or removing a skill,
- * then reload the DSH window.
+ * 面板本身**不再依赖**这个脚本：它在运行时通过 DSH 的 skills/list 接口
+ * 直接读取当前用户的技能，因此安装后无需生成任何清单。
+ * 本脚本只用来在命令行确认"当前环境存在哪些技能、根目录在哪"。
+ *
+ * 根目录自动发现，不写死任何机器路径：
+ *   - $DSH_HOME/skills（默认 ~/.dsh/skills）
+ *   - ~/.agents/skills
+ *   - $DSH_BUNDLED_SKILL_DIR（若设置）
+ *   - 工作区 .dsh/skills 与 .agents/skills
  */
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
+const env = process.env;
+const dshHome = env.DSH_HOME || join(homedir(), ".dsh");
+const agentsHome = env.DSH_AGENTS_HOME || join(homedir(), ".agents");
+
 const ROOTS = [
-  { dir: join(homedir(), ".dsh", "skills"), source: "user" },
-  { dir: join(homedir(), ".agents", "skills"), source: "user" },
-  { dir: join(homedir(), ".dsh", "profiles", "desktop", "skills"), source: "user" },
-  { dir: "D:/tools/deepseekHarness/resources/runtime/office-skills", source: "builtin" },
+  { dir: join(dshHome, "skills"), source: "user" },
+  { dir: join(agentsHome, "skills"), source: "user" },
+  { dir: join(dshHome, "profiles", env.DSH_PROFILE || "desktop", "skills"), source: "user" },
+  env.DSH_BUNDLED_SKILL_DIR ? { dir: resolve(env.DSH_BUNDLED_SKILL_DIR), source: "builtin" } : null,
   { dir: join(process.cwd(), ".dsh", "skills"), source: "project" },
   { dir: join(process.cwd(), ".agents", "skills"), source: "project" }
-];
+].filter(Boolean);
 
-function readFrontmatter(file) {
+function frontmatter(file) {
   const text = readFileSync(file, "utf8").replace(/^\uFEFF/, "");
   if (!text.startsWith("---")) return null;
   const end = text.indexOf("\n---", 3);
@@ -31,20 +41,14 @@ function readFrontmatter(file) {
   let name = "";
   let description = "";
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const nameMatch = /^name:\s*(.*)$/.exec(line);
-    if (nameMatch) { name = nameMatch[1].trim().replace(/^["']|["']$/g, ""); continue; }
-    const descMatch = /^description:\s*(.*)$/.exec(line);
-    if (!descMatch) continue;
-    let value = descMatch[1].trim();
-    if (value === ">" || value === "|" || value === ">-" || value === "|-") {
+    const n = /^name:\s*(.*)$/.exec(lines[i]);
+    if (n) { name = n[1].trim().replace(/^["']|["']$/g, ""); continue; }
+    const d = /^description:\s*(.*)$/.exec(lines[i]);
+    if (!d) continue;
+    let value = d[1].trim();
+    if (/^[>|][-+]?$/.test(value)) {
       const parts = [];
-      while (i + 1 < lines.length) {
-        const next = lines[i + 1];
-        if (next.length > 0 && !/^\s/.test(next)) break;
-        parts.push(next.trim());
-        i++;
-      }
+      while (i + 1 < lines.length && (lines[i + 1].trim() === "" || /^\s/.test(lines[i + 1]))) { parts.push(lines[i + 1].trim()); i++; }
       value = parts.filter(Boolean).join(" ");
     }
     description = value.replace(/^["']|["']$/g, "");
@@ -52,49 +56,22 @@ function readFrontmatter(file) {
   return name ? { name, description } : null;
 }
 
-function collect() {
-  const found = new Map();
-  for (const root of ROOTS) {
-    if (!existsSync(root.dir)) continue;
-    let entries;
-    try { entries = readdirSync(root.dir, { withFileTypes: true }); } catch { continue; }
-    for (const entry of entries) {
-      const full = join(root.dir, entry.name);
-      let skillFile = null;
-      if (entry.isDirectory()) {
-        const candidate = join(full, "SKILL.md");
-        if (existsSync(candidate)) skillFile = candidate;
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        skillFile = full;
-      }
-      if (!skillFile) continue;
-      const meta = readFrontmatter(skillFile);
-      if (!meta) continue;
-      if (found.has(meta.name)) continue;
-      found.set(meta.name, {
-        name: meta.name,
-        description: meta.description.replace(/\s+/g, " ").trim(),
-        source: root.source,
-        path: skillFile
-      });
-    }
+const found = new Map();
+for (const root of ROOTS) {
+  if (!existsSync(root.dir)) continue;
+  for (const entry of readdirSync(root.dir, { withFileTypes: true })) {
+    const full = join(root.dir, entry.name);
+    const file = entry.isDirectory() ? join(full, "SKILL.md") : entry.name.endsWith(".md") ? full : null;
+    if (!file || !existsSync(file)) continue;
+    const meta = frontmatter(file);
+    if (!meta || found.has(meta.name)) continue;
+    found.set(meta.name, { ...meta, source: root.source, path: file });
   }
-  return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const skills = collect();
-const target = join(process.cwd(), "lib", "client.js");
-const banner = "/* @skills-start */";
-const tail = "/* @skills-end */";
-const source = readFileSync(target, "utf8");
-const start = source.indexOf(banner);
-const end = source.indexOf(tail);
-if (start < 0 || end < 0) {
-  console.error("marker block not found in lib/client.js");
-  process.exit(1);
-}
-const json = JSON.stringify(skills);
-const next = source.slice(0, start + banner.length) + json + source.slice(end);
-writeFileSync(target, next, "utf8");
-console.log("synced " + skills.length + " skills:");
-for (const s of skills) console.log("  - " + s.name + " [" + s.source + "]");
+const list = [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
+console.log("扫描到的技能根目录:");
+for (const r of ROOTS) console.log("  " + (existsSync(r.dir) ? "[存在] " : "[缺失] ") + r.dir);
+console.log("\n发现 " + list.length + " 个技能:");
+for (const s of list) console.log("  - " + s.name + "  [" + s.source + "]  " + s.path);
+console.log("\n提示：面板在运行时直接读取当前实例的技能目录，无需运行本脚本。");
