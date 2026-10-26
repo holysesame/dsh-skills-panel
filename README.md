@@ -1,5 +1,5 @@
 # dsh-skills-panel
-
+[![开放插件市场](https://img.shields.io/endpoint?url=https%3A%2F%2Fdshopen.org%2Fbadge%2Fdsh-skills-panel.json)](https://dshopen.org/zh/plugins/dsh-skills-panel/)
 DSH Web 客户端的左侧栏「技能」面板：列出**当前 DSH 实例中你已安装的技能**，可固定常用项，点一下就把 `/技能名` 写进输入框。
 
 ## 功能
